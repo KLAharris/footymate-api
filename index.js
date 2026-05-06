@@ -63,6 +63,10 @@ async function getLeagueMatches(leagueId) {
   return data?.response?.matches ?? toArray(data, 'response', 'data', 'events', 'result');
 }
 
+function getLeagueId(obj) {
+  return obj?.id ?? obj?.leagueId ?? obj?.league_id ?? obj?.tournamentId;
+}
+
 function fuzzyMatch(haystack = '', needle = '') {
   const h = haystack.toLowerCase();
   const n = needle.toLowerCase();
@@ -144,31 +148,23 @@ function todayStr() {
 
 app.get('/live', async (req, res) => {
   try {
-    // Try dedicated live endpoint first, fall back to today's matches
-    let raw;
-    try {
-      raw = await cachedGet('live', '/football-current-live', {}, 60);
-    } catch (_) {
-      const today = todayStr();
-      raw = await cachedGet(`live_date:${today}`, '/football-get-matches-by-date', { date: today }, 60);
-    }
+    const today = todayStr();
+    const raw = await cachedGet(`live:${today}`, '/football-get-matches-by-date', { date: today }, 60);
+    // confirmed shape: response.matches[]
+    const all = raw?.response?.matches ?? toArray(raw, 'response', 'data', 'events', 'result');
 
-    // Handle both /football-current-live (response.live[]) and /football-get-matches-by-date shapes
-    const matches = raw?.response?.live ?? raw?.response?.matches ?? toArray(raw, 'response', 'data', 'events', 'matches', 'result');
+    const live = all.filter(m => m.status?.started === true && m.status?.finished === false);
 
-    const clean = matches
-      .filter(m => m.status?.ongoing || m.status?.started === true && m.status?.finished === false)
-      .map(m => ({
-        id: m.id,
-        home: m.home?.name ?? m.home?.longName,
-        homeScore: m.home?.score ?? 0,
-        away: m.away?.name ?? m.away?.longName,
-        awayScore: m.away?.score ?? 0,
-        score: m.status?.scoreStr ?? `${m.home?.score ?? 0} - ${m.away?.score ?? 0}`,
-        minute: m.status?.liveTime?.short ?? m.status?.liveTime?.long,
-        status: m.status?.ongoing ? 'LIVE' : 'NS',
-        leagueId: m.leagueId,
-      }));
+    const clean = live.map(m => ({
+      id: m.id,
+      home: m.home?.name,
+      homeScore: m.home?.score ?? 0,
+      away: m.away?.name,
+      awayScore: m.away?.score ?? 0,
+      score: `${m.home?.score ?? 0}-${m.away?.score ?? 0}`,
+      minute: m.status?.liveTime?.short ?? m.status?.liveTime?.long ?? null,
+      leagueId: m.leagueId,
+    }));
 
     return res.json({ ok: true, count: clean.length, matches: clean });
   } catch (e) {
@@ -290,7 +286,7 @@ app.get('/standings', async (req, res) => {
     const leagueObj = await findLeague(league);
     if (!leagueObj) return errRes(res, `League not found: ${league}`, 404);
 
-    const lid = leagueId(leagueObj);
+    const lid = getLeagueId(leagueObj);
     const raw = await cachedGet(`standings:${lid}`, '/football-get-standing-all', { leagueid: lid });
     // confirmed shape: response.standing[]
     const rows = raw?.response?.standing ?? toArray(raw, 'response', 'data', 'standings', 'table', 'result');
