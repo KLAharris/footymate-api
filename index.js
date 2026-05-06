@@ -5,342 +5,339 @@ const NodeCache = require('node-cache');
 const cors = require('cors');
 
 const app = express();
-const cache = new NodeCache({ stdTTL: 43200 }); // 12h default
+const cache = new NodeCache();
 
 app.use(cors());
 app.use(express.json());
 
-// ─── RapidAPI client ───────────────────────────────────────────────────────────
+// ─── BSD client ────────────────────────────────────────────────────────────────
 
-const BASE_URL = process.env.BASE_URL || 'https://free-api-live-football-data.p.rapidapi.com';
-
-const api = axios.create({
-  baseURL: BASE_URL,
-  headers: {
-    'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-    'X-RapidAPI-Host': process.env.RAPIDAPI_HOST || 'free-api-live-football-data.p.rapidapi.com',
-  },
+const bsd = axios.create({
+  baseURL: 'https://sports.bzzoiro.com/api',
+  headers: { Authorization: `Token ${process.env.BSD_TOKEN || 'ca760e5641a9678ade27e44435cf07889991ca7f'}` },
   timeout: 15000,
 });
 
-async function cachedGet(key, path, params = {}, ttl = 43200) {
+const espn = axios.create({
+  baseURL: 'https://site.api.espn.com/apis/v2/sports/soccer',
+  timeout: 15000,
+});
+
+const espnSite = axios.create({
+  baseURL: 'https://site.api.espn.com/apis/site/v2/sports/soccer',
+  timeout: 15000,
+});
+
+const LIVE_STATUSES = new Set([
+  '1st_half', '2nd_half', 'halftime', 'extra_time',
+  'extra_time_1st_half', 'extra_time_2nd_half', 'penalties', 'break_time',
+  'live', 'inprogress', 'in_progress',
+]);
+
+// ESPN league slug map for standings fallback
+const ESPN_LEAGUE_SLUGS = {
+  'premier league': 'eng.1',
+  'la liga': 'esp.1',
+  'bundesliga': 'ger.1',
+  'serie a': 'ita.1',
+  'ligue 1': 'fra.1',
+  'eredivisie': 'ned.1',
+  'primeira liga': 'por.1',
+  'super lig': 'tur.1',
+  'champions league': 'uefa.champions',
+  'europa league': 'uefa.europa',
+  'championship': 'eng.2',
+};
+
+async function cachedGet(key, fn, ttl) {
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
-  const { data } = await api.get(path, { params });
+  const data = await fn();
   cache.set(key, data, ttl);
   return data;
-}
-
-function toArray(data, ...keys) {
-  for (const k of keys) {
-    if (Array.isArray(data?.[k])) return data[k];
-  }
-  if (Array.isArray(data)) return data;
-  return [];
 }
 
 function errRes(res, msg, status = 500) {
   return res.status(status).json({ ok: false, error: msg });
 }
 
-// ─── Lookup helpers ────────────────────────────────────────────────────────────
-
-async function getAllLeagues() {
-  const data = await cachedGet('all_leagues', '/football-get-all-leagues');
-  // response.leagues[] shape confirmed
-  return data?.response?.leagues ?? toArray(data, 'response', 'data', 'leagues', 'result');
-}
-
-async function getPopularLeagues() {
-  const data = await cachedGet('popular_leagues', '/football-popular-leagues');
-  // response.popular[] shape confirmed
-  return data?.response?.popular ?? toArray(data, 'response', 'data', 'popular', 'leagues');
-}
-
-async function getLeagueMatches(leagueId) {
-  const data = await cachedGet(`matches:${leagueId}`, '/football-get-all-matches-by-league', { leagueid: leagueId });
-  // confirmed shape: response.matches[]
-  return data?.response?.matches ?? toArray(data, 'response', 'data', 'events', 'result');
-}
-
-function getLeagueId(obj) {
-  return obj?.id ?? obj?.leagueId ?? obj?.league_id ?? obj?.tournamentId;
-}
-
-function fuzzyMatch(haystack = '', needle = '') {
-  const h = haystack.toLowerCase();
-  const n = needle.toLowerCase();
-  return h.includes(n) || n.includes(h);
-}
-
-// Find a league — tries popular leagues first, then full list
-async function findLeague(name) {
-  const tryFind = (list) => list.find(l =>
-    fuzzyMatch(l.name ?? l.leagueName ?? l.localizedName ?? '', name)
-  );
-  const popular = await getPopularLeagues();
-  const hit = tryFind(popular);
-  if (hit) return hit;
-  const all = await getAllLeagues();
-  return tryFind(all) ?? null;
-}
-
-// Known league IDs for top teams — avoids extra API calls for common searches
-const KNOWN_TEAM_LEAGUES = {
-  // Premier League (47)
-  'arsenal': 47, 'chelsea': 47, 'liverpool': 47, 'manchester city': 47, 'man city': 47,
-  'manchester united': 47, 'man united': 47, 'man utd': 47, 'tottenham': 47, 'spurs': 47,
-  'newcastle': 47, 'aston villa': 47, 'west ham': 47, 'brighton': 47, 'everton': 47,
-  'fulham': 47, 'brentford': 47, 'wolves': 47, 'wolverhampton': 47, 'crystal palace': 47,
-  'bournemouth': 47, 'nottingham forest': 47, 'leeds': 47, 'burnley': 47, 'sunderland': 47,
-  // La Liga (87)
-  'barcelona': 87, 'real madrid': 87, 'atletico madrid': 87, 'atletico': 87,
-  'sevilla': 87, 'valencia': 87, 'villarreal': 87, 'real sociedad': 87, 'athletic': 87,
-  // Bundesliga (54)
-  'bayern': 54, 'borussia dortmund': 54, 'dortmund': 54, 'bvb': 54,
-  'leverkusen': 54, 'rb leipzig': 54, 'frankfurt': 54,
-  // Serie A (55)
-  'juventus': 55, 'inter milan': 55, 'inter': 55, 'ac milan': 55, 'milan': 55,
-  'napoli': 55, 'roma': 55, 'lazio': 55, 'atalanta': 55,
-  // Ligue 1 (53)
-  'psg': 53, 'paris saint-germain': 53, 'paris': 53, 'marseille': 53, 'lyon': 53, 'monaco': 53,
-};
-
-// Find all matches for a team by searching through popular leagues' match data
-async function findTeamMatches(teamName) {
-  const mapKey = `teammatches:${teamName.toLowerCase()}`;
-  const cached = cache.get(mapKey);
-  if (cached) return cached;
-
-  // Check known team→league map first to save API calls
-  const knownLeagueId = KNOWN_TEAM_LEAGUES[teamName.toLowerCase()];
-  const popular = await getPopularLeagues();
-
-  const leaguesToSearch = knownLeagueId
-    ? [popular.find(l => l.id === knownLeagueId) ?? { id: knownLeagueId, name: 'Unknown' }, ...popular.filter(l => l.id !== knownLeagueId)]
-    : popular;
-
-  for (const league of leaguesToSearch) {
-    const leagueId = league?.id;
-    if (!leagueId) continue;
-    try {
-      const matches = await getLeagueMatches(leagueId);
-      const teamMatches = matches.filter(m =>
-        fuzzyMatch(m.home?.name ?? '', teamName) || fuzzyMatch(m.away?.name ?? '', teamName)
-      );
-      if (teamMatches.length > 0) {
-        const result = { matches: teamMatches, league, leagueId };
-        cache.set(mapKey, result, 43200);
-        return result;
-      }
-    } catch (_) {
-      // Skip leagues that error
-    }
-  }
-  return null;
-}
-
-// Parse match date from timestamp or string
-function parseDate(m) {
-  const raw = m.startTimestamp ?? m.startTime ?? m.date ?? m.match_date ?? m.eventDate ?? m.matchDate;
-  if (!raw) return null;
-  if (typeof raw === 'number') return new Date(raw * 1000);
-  return new Date(raw);
-}
-
-function cleanMatch(m) {
-  const home = m.homeTeam ?? m.home_team ?? {};
-  const away = m.awayTeam ?? m.away_team ?? {};
-  const score = m.homeScore ?? m.score ?? {};
+function cleanEvent(e) {
   return {
-    id: m.id ?? m.eventId ?? m.event_id,
-    date: parseDate(m)?.toISOString() ?? null,
-    home: home.name ?? home.teamName ?? m.homeTeamName ?? m.localteam_name,
-    away: away.name ?? away.teamName ?? m.awayTeamName ?? m.visitorteam_name,
-    score: score.current ?? score.fulltime ?? m.ftScore ?? `${m.localteam_score ?? '?'}-${m.visitorteam_score ?? '?'}`,
-    status: m.status?.type ?? m.statusType ?? m.status ?? m.match_status,
-    competition: m.tournament?.name ?? m.league?.name ?? m.leagueName ?? m.competition,
+    id: e.id,
+    date: e.event_date ?? null,
+    home: e.home_team_obj?.name ?? e.home_team,
+    homeScore: e.home_score ?? null,
+    away: e.away_team_obj?.name ?? e.away_team,
+    awayScore: e.away_score ?? null,
+    score: e.home_score !== null && e.away_score !== null
+      ? `${e.home_score}-${e.away_score}` : null,
+    status: e.status,
+    minute: e.current_minute ?? null,
+    competition: e.league?.name ?? null,
+    venue: e.home_team_obj?.venue?.name ?? null,
+    round: e.round_number ?? null,
   };
 }
 
-// ─── GET /live ─────────────────────────────────────────────────────────────────
+// ─── GET /live  (60s cache) ────────────────────────────────────────────────────
 
 app.get('/live', async (req, res) => {
   try {
-    const today = new Date();
-    const date = today.getUTCFullYear().toString() +
-      String(today.getUTCMonth() + 1).padStart(2, '0') +
-      String(today.getUTCDate()).padStart(2, '0');
+    const data = await cachedGet('live', async () => {
+      const r = await bsd.get('/events/', { params: { live: true, limit: 100 } });
+      return r.data;
+    }, 60);
 
-    const response = await axios.get(
-      'https://free-api-live-football-data.p.rapidapi.com/football-get-matches-by-date',
-      {
-        params: { date },
-        headers: {
-          'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-          'X-RapidAPI-Host': 'free-api-live-football-data.p.rapidapi.com',
-        },
-      }
-    );
+    const matches = (data?.results ?? [])
+      .filter(e => LIVE_STATUSES.has((e.status ?? '').toLowerCase()))
+      .map(cleanEvent);
 
-    const all = response.data?.response?.matches ?? [];
-    const live = all
-      .filter(m => m.status?.started === true && m.status?.finished === false)
-      .map(m => ({
-        id: m.id,
-        home: m.home?.name,
-        homeScore: m.home?.score ?? 0,
-        away: m.away?.name,
-        awayScore: m.away?.score ?? 0,
-        score: m.status?.scoreStr ?? `${m.home?.score ?? 0}-${m.away?.score ?? 0}`,
-        minute: m.status?.liveTime?.short ?? m.status?.liveTime?.long ?? null,
-        leagueId: m.leagueId,
-      }));
-
-    return res.json({ ok: true, count: live.length, matches: live });
+    return res.json({ ok: true, count: matches.length, matches });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e.message, detail: e?.response?.data });
+    return errRes(res, e?.response?.data?.detail ?? e.message);
   }
 });
 
-// ─── GET /fixtures?team={teamName} ────────────────────────────────────────────
+// ─── GET /fixtures?team={teamName}  (12h cache) ───────────────────────────────
 
 app.get('/fixtures', async (req, res) => {
   const { team } = req.query;
   if (!team) return errRes(res, 'Missing required query param: team', 400);
 
   try {
-    const found = await findTeamMatches(team);
-    if (!found) return errRes(res, `Team not found: ${team}`, 404);
+    const data = await cachedGet(`fixtures:${team.toLowerCase()}`, async () => {
+      const r = await bsd.get('/events/', { params: { team, limit: 20 } });
+      return r.data;
+    }, 43200);
 
-    const now = Date.now();
-    const upcoming = found.matches
-      .filter(m => {
-        const d = new Date(m.status?.utcTime ?? m.startTimestamp * 1000 ?? null);
-        return d && d.getTime() > now && m.status?.started === false;
+    const now = new Date();
+    const upcoming = (data?.results ?? [])
+      .filter(e => {
+        const d = new Date(e.event_date);
+        return !isNaN(d) && d >= now;
       })
-      .sort((a, b) => new Date(a.status?.utcTime) - new Date(b.status?.utcTime))
+      .sort((a, b) => new Date(a.event_date) - new Date(b.event_date))
       .slice(0, 3)
-      .map(m => ({
-        id: m.id,
-        date: m.status?.utcTime ?? null,
-        home: m.home?.name,
-        away: m.away?.name,
-        competition: found.league?.name,
-      }));
+      .map(cleanEvent);
 
-    return res.json({
-      ok: true,
-      team,
-      league: found.league?.name,
-      upcoming,
-    });
+    if (!upcoming.length) {
+      return errRes(res, `No upcoming fixtures found for: ${team}`, 404);
+    }
+
+    return res.json({ ok: true, team, upcoming });
   } catch (e) {
-    return errRes(res, e?.response?.data?.message ?? e.message);
+    return errRes(res, e?.response?.data?.detail ?? e.message);
   }
 });
 
-// ─── GET /results?team={teamName} ─────────────────────────────────────────────
+// ─── GET /results?team={teamName}  (12h cache) ────────────────────────────────
 
 app.get('/results', async (req, res) => {
   const { team } = req.query;
   if (!team) return errRes(res, 'Missing required query param: team', 400);
 
   try {
-    const found = await findTeamMatches(team);
-    if (!found) return errRes(res, `Team not found: ${team}`, 404);
+    const q = team.toLowerCase();
+    const now = new Date();
+    const from = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const fmt = d => d.toISOString().slice(0, 10).replace(/-/g, '');
+    const dateRange = `${fmt(from)}-${fmt(now)}`;
 
-    const now = Date.now();
-    const recent = found.matches
-      .filter(m => {
-        const d = new Date(m.status?.utcTime ?? null);
-        return d && d.getTime() < now && m.status?.finished === true;
-      })
-      .sort((a, b) => new Date(b.status?.utcTime) - new Date(a.status?.utcTime))
-      .slice(0, 3)
-      .map(m => ({
-        id: m.id,
-        date: m.status?.utcTime ?? null,
-        home: m.home?.name,
-        homeScore: m.home?.score,
-        away: m.away?.name,
-        awayScore: m.away?.score,
-        score: `${m.home?.score ?? '?'}-${m.away?.score ?? '?'}`,
-        competition: found.league?.name,
-      }));
+    const recent = await cachedGet(`results:${q}`, async () => {
+      const fetches = Object.entries(ESPN_LEAGUE_SLUGS).map(([leagueName, slug]) =>
+        espnSite.get(`/${slug}/scoreboard`, { params: { dates: dateRange } })
+          .then(r => (r.data?.events ?? []).map(e => ({ ...e, _league: leagueName })))
+          .catch(() => [])
+      );
+      const allEvents = (await Promise.all(fetches)).flat();
 
-    return res.json({
-      ok: true,
-      team,
-      league: found.league?.name,
-      recent,
-    });
+      return allEvents
+        .filter(e => {
+          const competitors = e.competitions?.[0]?.competitors ?? [];
+          return competitors.some(c => c.team?.displayName?.toLowerCase().includes(q));
+        })
+        .map(e => {
+          const comps = e.competitions?.[0] ?? {};
+          const home = comps.competitors?.find(c => c.homeAway === 'home');
+          const away = comps.competitors?.find(c => c.homeAway === 'away');
+          return {
+            id: e.id,
+            date: e.date,
+            home: home?.team?.displayName ?? null,
+            homeScore: home?.score ?? null,
+            away: away?.team?.displayName ?? null,
+            awayScore: away?.score ?? null,
+            score: home?.score != null && away?.score != null ? `${home.score}-${away.score}` : null,
+            status: e.status?.type?.name ?? null,
+            competition: e._league,
+            venue: comps.venue?.fullName ?? null,
+          };
+        })
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 3);
+    }, 43200);
+
+    if (!recent.length) return errRes(res, `No results found for: ${team}`, 404);
+
+    return res.json({ ok: true, team, recent });
   } catch (e) {
-    return errRes(res, e?.response?.data?.message ?? e.message);
+    return errRes(res, e?.response?.data?.detail ?? e.message);
   }
 });
 
-// ─── GET /player?name={playerName} ────────────────────────────────────────────
+// ─── GET /player?name={playerName}  (24h cache) ───────────────────────────────
 
 app.get('/player', async (req, res) => {
   const { name } = req.query;
-  if (!name) return errRes(res, 'Missing required query param: name (e.g. /player?name=Messi)', 400);
+  if (!name) return errRes(res, 'Missing required query param: name', 400);
 
   try {
-    const raw = await cachedGet(`player_search:${name.toLowerCase()}`, '/football-players-search', { search: name });
-    // confirmed shape: response.suggestions[]
-    const all = raw?.response?.suggestions ?? toArray(raw, 'response', 'data', 'players', 'result');
-    const players = all.filter(p => p.type === 'player' || !p.type);
+    const nameTokens = name.trim().split(/\s+/);
+    const q = name.toLowerCase();
 
+    const data = await cachedGet(`player:${q}`, async () => {
+      const r = await bsd.get('/players/', { params: { search: name.trim(), limit: 100 } });
+      return r.data?.results ?? [];
+    }, 86400);
+
+    const players = Array.isArray(data) ? data : (data?.results ?? []);
     if (!players.length) return errRes(res, `Player not found: ${name}`, 404);
 
-    const clean = players.slice(0, 5).map(p => ({
-      id: p.id ?? p.playerId,
-      name: p.name ?? p.playerName,
-      team: p.teamName ?? p.team?.name,
-      teamId: p.teamId,
+    const tokens = q.split(/\s+/);
+
+    // Score each player by how many name tokens match
+    const scored = players
+      .map(p => {
+        const pName = (p.name ?? '').toLowerCase();
+        const exact = pName === q ? 100 : 0;
+        const tokenMatches = tokens.filter(t => pName.includes(t)).length;
+        return { p, score: exact + tokenMatches };
+      })
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    if (!scored.length) return errRes(res, `Player not found: ${name}`, 404);
+
+    const top = scored.slice(0, 5).map(x => x.p);
+
+    const clean = top.map(p => ({
+      id: p.id,
+      name: p.name,
+      shortName: p.short_name,
+      position: p.specific_position ?? p.position,
+      nationality: p.nationality,
+      team: p.current_team?.name ?? null,
+      dateOfBirth: p.date_of_birth ?? null,
+      marketValue: p.market_value ?? null,
     }));
 
     return res.json({ ok: true, count: clean.length, players: clean });
   } catch (e) {
-    return errRes(res, e?.response?.data?.message ?? e.message);
+    return errRes(res, e?.response?.data?.detail ?? e.message);
   }
 });
 
-// ─── GET /standings?league={leagueName} ───────────────────────────────────────
+// ─── GET /standings?league={leagueName}  (6h cache) ───────────────────────────
 
 app.get('/standings', async (req, res) => {
   const { league } = req.query;
   if (!league) return errRes(res, 'Missing required query param: league', 400);
 
+  const q = league.toLowerCase();
+
+  // Try ESPN first (more reliable)
+  const espnSlug = Object.entries(ESPN_LEAGUE_SLUGS).find(([k]) => q.includes(k) || k.includes(q))?.[1];
+
+  if (espnSlug) {
+    try {
+      const table = await cachedGet(`standings:espn:${espnSlug}`, async () => {
+        const r = await espn.get(`/${espnSlug}/standings`);
+        const groups = r.data?.children ?? [];
+        const rows = [];
+        for (const group of groups) {
+          for (const entry of group.standings?.entries ?? []) {
+            const stats = Object.fromEntries((entry.stats ?? []).map(s => [s.name, s.value]));
+            rows.push({
+              position: rows.length + 1,
+              team: entry.team?.displayName ?? entry.team?.name,
+              played: stats.gamesPlayed ?? stats.played ?? null,
+              won: stats.wins ?? null,
+              drawn: stats.ties ?? stats.drawn ?? null,
+              lost: stats.losses ?? null,
+              points: stats.points ?? null,
+              goalDiff: stats.pointDifferential ?? stats.goalDifference ?? null,
+            });
+          }
+        }
+        return rows;
+      }, 21600);
+
+      if (table.length) {
+        return res.json({ ok: true, league, source: 'espn', standings: table });
+      }
+    } catch (_) {
+      // fall through to BSD
+    }
+  }
+
+  // BSD fallback
   try {
-    const leagueObj = await findLeague(league);
+    const leaguesData = await cachedGet('all_leagues', async () => {
+      const r = await bsd.get('/leagues/', { params: { limit: 100 } });
+      return r.data;
+    }, 86400);
+
+    const leagues = leaguesData?.results ?? [];
+    const leagueObj = leagues.find(l =>
+      (l.name ?? '').toLowerCase().includes(q) || q.includes((l.name ?? '').toLowerCase())
+    );
+
     if (!leagueObj) return errRes(res, `League not found: ${league}`, 404);
 
-    const lid = getLeagueId(leagueObj);
-    const raw = await cachedGet(`standings:${lid}`, '/football-get-standing-all', { leagueid: lid });
-    // confirmed shape: response.standing[]
-    const rows = raw?.response?.standing ?? toArray(raw, 'response', 'data', 'standings', 'table', 'result');
+    const seasonId = leagueObj.current_season?.id;
+    if (!seasonId) return errRes(res, `No active season for: ${league}`, 404);
+
+    const standingsData = await cachedGet(`standings:bsd:${seasonId}`, async () => {
+      const r = await bsd.get('/standings/', { params: { season: seasonId, limit: 30 } });
+      return r.data;
+    }, 21600);
+
+    const rows = standingsData?.results ?? standingsData?.standings ?? (Array.isArray(standingsData) ? standingsData : []);
+
+    if (!rows.length) return errRes(res, `No standings data found for: ${league}`, 404);
 
     const table = rows.map(r => ({
-      position: r.idx ?? r.position ?? r.rank,
-      team: r.name ?? r.shortName ?? r.teamName,
-      played: r.played ?? r.matches,
-      won: r.wins ?? r.won,
-      drawn: r.draws ?? r.drawn,
-      lost: r.losses ?? r.lost,
-      points: r.pts ?? r.points,
-      goalDiff: r.goalConDiff ?? r.goalsDiff,
-      score: r.scoresStr,
+      position: r.rank ?? r.position,
+      team: r.team?.name ?? r.team_name,
+      played: r.played ?? r.matches_played,
+      won: r.won ?? r.wins,
+      drawn: r.drawn ?? r.draws,
+      lost: r.lost ?? r.losses,
+      points: r.points ?? r.pts,
+      goalDiff: r.goal_difference ?? r.gd,
     }));
 
+    return res.json({ ok: true, league: leagueObj.name, source: 'bsd', standings: table });
+  } catch (e) {
+    return errRes(res, e?.response?.data?.detail ?? e.message);
+  }
+});
+
+// ─── GET /debug ────────────────────────────────────────────────────────────────
+
+app.get('/debug', async (req, res) => {
+  try {
+    const r = await bsd.get('/events/', { params: { live: true, limit: 5 } });
+    const statuses = (r.data?.results ?? []).map(e => e.status);
     return res.json({
       ok: true,
-      league: leagueObj.leagueName ?? leagueObj.name ?? leagueObj.tournamentName ?? league,
-      standings: table,
+      tokenSet: !!process.env.BSD_TOKEN,
+      bsdStatus: r.status,
+      totalLive: r.data?.count,
+      sampleStatuses: statuses,
     });
   } catch (e) {
-    return errRes(res, e?.response?.data?.message ?? e.message);
+    return res.json({ ok: false, tokenSet: !!process.env.BSD_TOKEN, error: e.message, status: e?.response?.status });
   }
 });
 
@@ -352,55 +349,13 @@ app.get('/', (req, res) => {
     service: 'footymate-api',
     endpoints: [
       'GET /live',
+      'GET /standings?league={leagueName}',
       'GET /fixtures?team={teamName}',
       'GET /results?team={teamName}',
       'GET /player?name={playerName}',
-      'GET /standings?league={leagueName}',
     ],
   });
 });
-
-// ─── GET /debug ────────────────────────────────────────────────────────────────
-
-app.get('/debug', async (req, res) => {
-  try {
-    const today = new Date();
-    const date = today.getUTCFullYear().toString() +
-      String(today.getUTCMonth() + 1).padStart(2, '0') +
-      String(today.getUTCDate()).padStart(2, '0');
-
-    const url = 'https://free-api-live-football-data.p.rapidapi.com/football-get-matches-by-date';
-
-    const response = await axios.get(url, {
-      params: { date },
-      headers: {
-        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-        'X-RapidAPI-Host': 'free-api-live-football-data.p.rapidapi.com',
-      },
-    });
-
-    return res.json({
-      ok: true,
-      keyExists: !!process.env.RAPIDAPI_KEY,
-      keyLength: process.env.RAPIDAPI_KEY?.length,
-      date,
-      url,
-      status: response.status,
-      data: response.data,
-    });
-  } catch (e) {
-    return res.json({
-      ok: false,
-      keyExists: !!process.env.RAPIDAPI_KEY,
-      keyLength: process.env.RAPIDAPI_KEY?.length,
-      error: e.message,
-      status: e?.response?.status,
-      detail: e?.response?.data,
-    });
-  }
-});
-
-// ─── Start ─────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`footymate-api running on port ${PORT}`));
