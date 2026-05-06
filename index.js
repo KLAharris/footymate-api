@@ -156,7 +156,21 @@ app.get('/live', async (req, res) => {
       }
     );
 
-    return res.json({ ok: true, data: response.data });
+    const all = response.data?.response?.matches ?? [];
+    const live = all
+      .filter(m => m.status?.started === true && m.status?.finished === false)
+      .map(m => ({
+        id: m.id,
+        home: m.home?.name,
+        homeScore: m.home?.score ?? 0,
+        away: m.away?.name,
+        awayScore: m.away?.score ?? 0,
+        score: m.status?.scoreStr ?? `${m.home?.score ?? 0}-${m.away?.score ?? 0}`,
+        minute: m.status?.liveTime?.short ?? m.status?.liveTime?.long ?? null,
+        leagueId: m.leagueId,
+      }));
+
+    return res.json({ ok: true, count: live.length, matches: live });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message, detail: e?.response?.data });
   }
