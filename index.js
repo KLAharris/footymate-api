@@ -54,6 +54,219 @@ const ESPN_LEAGUE_SLUGS = {
   'championship': 'eng.2',
 };
 
+const teamMap = {
+  // Premier League
+  "arsenal": "133604",
+  "aston villa": "133601",
+  "bournemouth": "134301",
+  "brentford": "134355",
+  "brighton": "133619",
+  "brighton and hove albion": "133619",
+  "burnley": "133623",
+  "chelsea": "133610",
+  "crystal palace": "133632",
+  "everton": "133615",
+  "fulham": "133600",
+  "ipswich": "133618",
+  "ipswich town": "133618",
+  "leeds": "133624",
+  "leeds united": "133624",
+  "leicester": "133614",
+  "leicester city": "133614",
+  "liverpool": "133602",
+  "luton": "134303",
+  "luton town": "134303",
+  "manchester city": "133613",
+  "man city": "133613",
+  "manchester united": "133612",
+  "man united": "133612",
+  "man utd": "133612",
+  "newcastle": "133608",
+  "newcastle united": "133608",
+  "nottingham forest": "133609",
+  "forest": "133609",
+  "sheffield united": "133620",
+  "southampton": "133607",
+  "sunderland": "133621",
+  "tottenham": "133616",
+  "tottenham hotspur": "133616",
+  "spurs": "133616",
+  "west ham": "133611",
+  "west ham united": "133611",
+  "wolverhampton": "133622",
+  "wolves": "133622",
+
+  // La Liga
+  "barcelona": "133739",
+  "barca": "133739",
+  "real madrid": "133742",
+  "atletico madrid": "133744",
+  "atletico": "133744",
+  "sevilla": "133746",
+  "real betis": "133748",
+  "betis": "133748",
+  "real sociedad": "133749",
+  "villarreal": "133752",
+  "athletic bilbao": "133743",
+  "bilbao": "133743",
+  "valencia": "133750",
+  "osasuna": "133756",
+  "celta vigo": "133755",
+  "celta": "133755",
+  "getafe": "133758",
+  "rayo vallecano": "133760",
+  "rayo": "133760",
+  "mallorca": "133753",
+  "girona": "134316",
+  "cadiz": "134308",
+  "granada": "133759",
+  "almeria": "134314",
+  "las palmas": "133762",
+
+  // Serie A
+  "juventus": "133632",
+  "juve": "133632",
+  "inter milan": "133728",
+  "inter": "133728",
+  "ac milan": "133722",
+  "milan": "133722",
+  "napoli": "133723",
+  "roma": "133731",
+  "as roma": "133731",
+  "lazio": "133733",
+  "atalanta": "133726",
+  "fiorentina": "133725",
+  "torino": "133729",
+  "bologna": "133724",
+  "udinese": "133736",
+  "sampdoria": "133730",
+  "sassuolo": "133732",
+  "empoli": "133738",
+  "lecce": "133740",
+  "monza": "134409",
+  "hellas verona": "133734",
+  "verona": "133734",
+  "frosinone": "133737",
+  "salernitana": "134311",
+  "genoa": "133727",
+  "cagliari": "133735",
+
+  // Bundesliga
+  "bayern munich": "133655",
+  "bayern": "133655",
+  "borussia dortmund": "133656",
+  "dortmund": "133656",
+  "bvb": "133656",
+  "rb leipzig": "134310",
+  "leipzig": "134310",
+  "bayer leverkusen": "133657",
+  "leverkusen": "133657",
+  "eintracht frankfurt": "133659",
+  "frankfurt": "133659",
+  "wolfsburg": "133664",
+  "borussia monchengladbach": "133660",
+  "gladbach": "133660",
+  "union berlin": "134302",
+  "union": "134302",
+  "freiburg": "133661",
+  "sc freiburg": "133661",
+  "mainz": "133665",
+  "hoffenheim": "133663",
+  "augsburg": "133666",
+  "werder bremen": "133662",
+  "bremen": "133662",
+  "stuttgart": "133658",
+  "vfb stuttgart": "133658",
+  "cologne": "133667",
+  "fc koln": "133667",
+  "heidenheim": "134420",
+  "darmstadt": "134409",
+
+  // Ligue 1
+  "psg": "133718",
+  "paris saint-germain": "133718",
+  "paris sg": "133718",
+  "paris": "133718",
+  "marseille": "133719",
+  "lyon": "133720",
+  "monaco": "133721",
+  "lille": "133716",
+  "nice": "133715",
+  "lens": "133713",
+  "rennes": "133714",
+  "strasbourg": "133717",
+  "nantes": "133711",
+  "reims": "133712",
+  "toulouse": "133710",
+  "montpellier": "133709",
+  "brest": "134304",
+  "lorient": "133708",
+  "clermont": "134312",
+  "metz": "133707",
+  "le havre": "134421",
+
+  // Turkish Super Lig
+  "galatasaray": "133536",
+  "fenerbahce": "133538",
+  "besiktas": "133537",
+  "trabzonspor": "133539",
+
+  // Portuguese Liga
+  "sporting cp": "133764",
+  "sporting": "133764",
+  "porto": "133763",
+  "fc porto": "133763",
+  "benfica": "133762",
+  "sl benfica": "133762",
+  "braga": "133765",
+
+  // Dutch Eredivisie
+  "ajax": "133686",
+  "psv": "133687",
+  "psv eindhoven": "133687",
+  "feyenoord": "133688",
+  "az alkmaar": "133689",
+  "az": "133689",
+  "twente": "133690",
+
+  // Belgian Pro League
+  "club brugge": "133680",
+  "brugge": "133680",
+  "anderlecht": "133681",
+  "gent": "133682",
+
+  // Austrian Bundesliga
+  "red bull salzburg": "133645",
+  "salzburg": "133645",
+  "rapid vienna": "133646",
+  "sturm graz": "133647",
+
+  // Scottish Premiership
+  "celtic": "133700",
+  "rangers": "133699",
+
+  // Ukrainian Premier League
+  "shakhtar donetsk": "133531",
+  "shakhtar": "133531",
+  "dynamo kyiv": "133532",
+
+  // Greek Super League
+  "olympiakos": "133551",
+  "panathinaikos": "133552",
+
+  // Czech Liga
+  "slavia prague": "133561",
+  "sparta prague": "133562",
+
+  // Danish Superliga
+  "fc copenhagen": "133571",
+  "copenhagen": "133571",
+
+  // Swiss Super League
+  "young boys": "133641",
+  "bsc young boys": "133641",
+};
+
 async function cachedGet(key, fn, ttl) {
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
@@ -109,6 +322,10 @@ app.get('/fixtures', async (req, res) => {
   const { team } = req.query;
   if (!team) return errRes(res, 'Missing required query param: team', 400);
 
+  if (!teamMap[team.toLowerCase()]) {
+    return res.status(404).json({ ok: false, error: `Team not found: ${team}`, available: Object.keys(teamMap) });
+  }
+
   try {
     const data = await cachedGet(`fixtures:${team.toLowerCase()}`, async () => {
       const r = await bsd.get('/events/', { params: { team, limit: 20 } });
@@ -140,6 +357,10 @@ app.get('/fixtures', async (req, res) => {
 app.get('/results', async (req, res) => {
   const { team } = req.query;
   if (!team) return errRes(res, 'Missing required query param: team', 400);
+
+  if (!teamMap[team.toLowerCase()]) {
+    return res.status(404).json({ ok: false, error: `Team not found: ${team}`, available: Object.keys(teamMap) });
+  }
 
   try {
     const q = team.toLowerCase();
@@ -334,25 +555,15 @@ app.get('/team', async (req, res) => {
   const { name } = req.query;
   if (!name) return errRes(res, 'Missing required query param: name', 400);
 
-  // Step 1: resolve team ID (24h cache)
-  let teamId, teamName, teamBadge;
-  try {
-    const teamData = await cachedGet(`sportsdb:team:${name.toLowerCase()}`, async () => {
-      const r = await sportsdb.get('/searchteams.php', { params: { t: name } });
-      return r.data;
-    }, 86400);
-
-    const team = teamData?.teams?.[0];
-    if (!team) return errRes(res, `Team not found: ${name}`, 404);
-
-    teamId    = team.idTeam;
-    teamName  = team.strTeam;
-    teamBadge = team.strTeamBadge ?? null;
-  } catch (e) {
-    return errRes(res, e?.response?.data?.message ?? e.message);
+  const key = name.toLowerCase();
+  const teamId = teamMap[key];
+  if (!teamId) {
+    return res.status(404).json({ ok: false, error: `Team not found: ${name}`, available: Object.keys(teamMap) });
   }
+  const teamName = name;
+  const teamBadge = null;
 
-  // Step 2: fetch upcoming and recent in parallel, each isolated
+  // Fetch upcoming and recent in parallel, each isolated
   const [upcoming, recent] = await Promise.all([
     (async () => {
       try {
