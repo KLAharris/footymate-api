@@ -28,6 +28,11 @@ const espnSite = axios.create({
   timeout: 15000,
 });
 
+const sportsdb = axios.create({
+  baseURL: 'https://www.thesportsdb.com/api/v1/json/3',
+  timeout: 15000,
+});
+
 const LIVE_STATUSES = new Set([
   '1st_half', '2nd_half', 'halftime', 'extra_time',
   'extra_time_1st_half', 'extra_time_2nd_half', 'penalties', 'break_time',
@@ -323,6 +328,71 @@ app.get('/standings', async (req, res) => {
   }
 });
 
+// ─── GET /team?name={teamName}  (team:24h, fixtures/results:12h) ──────────────
+
+app.get('/team', async (req, res) => {
+  const { name } = req.query;
+  if (!name) return errRes(res, 'Missing required query param: name', 400);
+
+  // Step 1: resolve team ID (24h cache)
+  let teamId, teamName, teamBadge;
+  try {
+    const teamData = await cachedGet(`sportsdb:team:${name.toLowerCase()}`, async () => {
+      const r = await sportsdb.get('/searchteams.php', { params: { t: name } });
+      return r.data;
+    }, 86400);
+
+    const team = teamData?.teams?.[0];
+    if (!team) return errRes(res, `Team not found: ${name}`, 404);
+
+    teamId    = team.idTeam;
+    teamName  = team.strTeam;
+    teamBadge = team.strTeamBadge ?? null;
+  } catch (e) {
+    return errRes(res, e?.response?.data?.message ?? e.message);
+  }
+
+  // Step 2: fetch upcoming and recent in parallel, each isolated
+  const [upcoming, recent] = await Promise.all([
+    (async () => {
+      try {
+        return await cachedGet(`sportsdb:fixtures:${teamId}`, async () => {
+          const r = await sportsdb.get('/eventsnext.php', { params: { id: teamId } });
+          return (r.data?.events ?? []).slice(0, 3).map(e => ({
+            date:   e.dateEvent ?? null,
+            time:   e.strTime ? e.strTime.slice(0, 5) : null,
+            home:   e.strHomeTeam ?? null,
+            away:   e.strAwayTeam ?? null,
+            venue:  e.strVenue ?? null,
+            league: e.strLeague ?? null,
+          }));
+        }, 43200);
+      } catch {
+        return [];
+      }
+    })(),
+    (async () => {
+      try {
+        return await cachedGet(`sportsdb:results:${teamId}`, async () => {
+          const r = await sportsdb.get('/eventslast.php', { params: { id: teamId } });
+          return (r.data?.results ?? []).slice(0, 3).map(e => ({
+            date:   e.dateEvent ?? null,
+            home:   e.strHomeTeam ?? null,
+            away:   e.strAwayTeam ?? null,
+            score:  e.intHomeScore != null && e.intAwayScore != null
+                      ? `${e.intHomeScore}-${e.intAwayScore}` : null,
+            league: e.strLeague ?? null,
+          }));
+        }, 43200);
+      } catch {
+        return [];
+      }
+    })(),
+  ]);
+
+  return res.json({ ok: true, team: teamName, teamBadge, upcoming, recent });
+});
+
 // ─── GET /debug ────────────────────────────────────────────────────────────────
 
 app.get('/debug', async (req, res) => {
@@ -353,6 +423,7 @@ app.get('/', (req, res) => {
       'GET /fixtures?team={teamName}',
       'GET /results?team={teamName}',
       'GET /player?name={playerName}',
+      'GET /team?name={teamName}',
     ],
   });
 });
