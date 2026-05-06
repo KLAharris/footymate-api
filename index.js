@@ -319,6 +319,48 @@ app.get('/', (req, res) => {
   });
 });
 
+// ─── GET /debug ────────────────────────────────────────────────────────────────
+
+app.get('/debug', async (req, res) => {
+  try {
+    const today = new Date();
+    const date = today.getUTCFullYear().toString() +
+      String(today.getUTCMonth() + 1).padStart(2, '0') +
+      String(today.getUTCDate()).padStart(2, '0');
+
+    const url = 'https://free-api-live-football-data.p.rapidapi.com/football-get-matches-by-date';
+
+    const response = await axios.get(url, {
+      params: { date },
+      headers: {
+        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+        'X-RapidAPI-Host': 'free-api-live-football-data.p.rapidapi.com',
+      },
+    });
+
+    return res.json({
+      ok: true,
+      keyExists: !!process.env.RAPIDAPI_KEY,
+      keyLength: process.env.RAPIDAPI_KEY?.length,
+      date,
+      url,
+      status: response.status,
+      data: response.data,
+    });
+  } catch (e) {
+    return res.json({
+      ok: false,
+      keyExists: !!process.env.RAPIDAPI_KEY,
+      keyLength: process.env.RAPIDAPI_KEY?.length,
+      error: e.message,
+      status: e?.response?.status,
+      detail: e?.response?.data,
+    });
+  }
+});
+
+// ─── Start ─────────────────────────────────────────────────────────────────────
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`footymate-api running on port ${PORT}`));
 module.exports = app;
