@@ -138,37 +138,27 @@ function cleanMatch(m) {
 
 // ─── GET /live ─────────────────────────────────────────────────────────────────
 
-function todayStr() {
-  const d = new Date();
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}${m}${day}`;
-}
-
 app.get('/live', async (req, res) => {
   try {
-    const today = todayStr();
-    const raw = await cachedGet(`live:${today}`, '/football-get-matches-by-date', { date: today }, 60);
-    // confirmed shape: response.matches[]
-    const all = raw?.response?.matches ?? toArray(raw, 'response', 'data', 'events', 'result');
+    const today = new Date();
+    const date = today.getUTCFullYear().toString() +
+      String(today.getUTCMonth() + 1).padStart(2, '0') +
+      String(today.getUTCDate()).padStart(2, '0');
 
-    const live = all.filter(m => m.status?.started === true && m.status?.finished === false);
+    const response = await axios.get(
+      'https://free-api-live-football-data.p.rapidapi.com/football-get-matches-by-date',
+      {
+        params: { date },
+        headers: {
+          'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+          'X-RapidAPI-Host': 'free-api-live-football-data.p.rapidapi.com',
+        },
+      }
+    );
 
-    const clean = live.map(m => ({
-      id: m.id,
-      home: m.home?.name,
-      homeScore: m.home?.score ?? 0,
-      away: m.away?.name,
-      awayScore: m.away?.score ?? 0,
-      score: `${m.home?.score ?? 0}-${m.away?.score ?? 0}`,
-      minute: m.status?.liveTime?.short ?? m.status?.liveTime?.long ?? null,
-      leagueId: m.leagueId,
-    }));
-
-    return res.json({ ok: true, count: clean.length, matches: clean });
+    return res.json({ ok: true, data: response.data });
   } catch (e) {
-    return errRes(res, e?.response?.data?.message ?? e.message);
+    return res.status(500).json({ ok: false, error: e.message, detail: e?.response?.data });
   }
 });
 
