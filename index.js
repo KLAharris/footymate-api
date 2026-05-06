@@ -12,11 +12,13 @@ app.use(express.json());
 
 // ─── RapidAPI client ───────────────────────────────────────────────────────────
 
+const BASE_URL = process.env.BASE_URL || 'https://free-api-live-football-data.p.rapidapi.com';
+
 const api = axios.create({
-  baseURL: process.env.BASE_URL,
+  baseURL: BASE_URL,
   headers: {
     'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-    'X-RapidAPI-Host': process.env.RAPIDAPI_HOST,
+    'X-RapidAPI-Host': process.env.RAPIDAPI_HOST || 'free-api-live-football-data.p.rapidapi.com',
   },
   timeout: 15000,
 });
@@ -132,22 +134,42 @@ function cleanMatch(m) {
 
 // ─── GET /live ─────────────────────────────────────────────────────────────────
 
+function todayStr() {
+  const d = new Date();
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}${m}${day}`;
+}
+
 app.get('/live', async (req, res) => {
   try {
-    const raw = await cachedGet('live', '/football-current-live', {}, 60);
-    // confirmed shape: response.live[]
-    const matches = raw?.response?.live ?? toArray(raw, 'response', 'data', 'events', 'matches', 'result');
-    const clean = matches.map(m => ({
-      id: m.id,
-      home: m.home?.name ?? m.home?.longName,
-      homeScore: m.home?.score ?? 0,
-      away: m.away?.name ?? m.away?.longName,
-      awayScore: m.away?.score ?? 0,
-      score: m.status?.scoreStr ?? `${m.home?.score ?? 0} - ${m.away?.score ?? 0}`,
-      minute: m.status?.liveTime?.short ?? m.status?.liveTime?.long,
-      status: m.status?.ongoing ? 'LIVE' : m.status?.finished ? 'FT' : 'NS',
-      leagueId: m.leagueId,
-    }));
+    // Try dedicated live endpoint first, fall back to today's matches
+    let raw;
+    try {
+      raw = await cachedGet('live', '/football-current-live', {}, 60);
+    } catch (_) {
+      const today = todayStr();
+      raw = await cachedGet(`live_date:${today}`, '/football-get-matches-by-date', { date: today }, 60);
+    }
+
+    // Handle both /football-current-live (response.live[]) and /football-get-matches-by-date shapes
+    const matches = raw?.response?.live ?? raw?.response?.matches ?? toArray(raw, 'response', 'data', 'events', 'matches', 'result');
+
+    const clean = matches
+      .filter(m => m.status?.ongoing || m.status?.started === true && m.status?.finished === false)
+      .map(m => ({
+        id: m.id,
+        home: m.home?.name ?? m.home?.longName,
+        homeScore: m.home?.score ?? 0,
+        away: m.away?.name ?? m.away?.longName,
+        awayScore: m.away?.score ?? 0,
+        score: m.status?.scoreStr ?? `${m.home?.score ?? 0} - ${m.away?.score ?? 0}`,
+        minute: m.status?.liveTime?.short ?? m.status?.liveTime?.long,
+        status: m.status?.ongoing ? 'LIVE' : 'NS',
+        leagueId: m.leagueId,
+      }));
+
     return res.json({ ok: true, count: clean.length, matches: clean });
   } catch (e) {
     return errRes(res, e?.response?.data?.message ?? e.message);
