@@ -85,15 +85,42 @@ async function findLeague(name) {
   return tryFind(all) ?? null;
 }
 
+// Known league IDs for top teams — avoids extra API calls for common searches
+const KNOWN_TEAM_LEAGUES = {
+  // Premier League (47)
+  'arsenal': 47, 'chelsea': 47, 'liverpool': 47, 'manchester city': 47, 'man city': 47,
+  'manchester united': 47, 'man united': 47, 'man utd': 47, 'tottenham': 47, 'spurs': 47,
+  'newcastle': 47, 'aston villa': 47, 'west ham': 47, 'brighton': 47, 'everton': 47,
+  'fulham': 47, 'brentford': 47, 'wolves': 47, 'wolverhampton': 47, 'crystal palace': 47,
+  'bournemouth': 47, 'nottingham forest': 47, 'leeds': 47, 'burnley': 47, 'sunderland': 47,
+  // La Liga (87)
+  'barcelona': 87, 'real madrid': 87, 'atletico madrid': 87, 'atletico': 87,
+  'sevilla': 87, 'valencia': 87, 'villarreal': 87, 'real sociedad': 87, 'athletic': 87,
+  // Bundesliga (54)
+  'bayern': 54, 'borussia dortmund': 54, 'dortmund': 54, 'bvb': 54,
+  'leverkusen': 54, 'rb leipzig': 54, 'frankfurt': 54,
+  // Serie A (55)
+  'juventus': 55, 'inter milan': 55, 'inter': 55, 'ac milan': 55, 'milan': 55,
+  'napoli': 55, 'roma': 55, 'lazio': 55, 'atalanta': 55,
+  // Ligue 1 (53)
+  'psg': 53, 'paris saint-germain': 53, 'paris': 53, 'marseille': 53, 'lyon': 53, 'monaco': 53,
+};
+
 // Find all matches for a team by searching through popular leagues' match data
 async function findTeamMatches(teamName) {
   const mapKey = `teammatches:${teamName.toLowerCase()}`;
   const cached = cache.get(mapKey);
   if (cached) return cached;
 
+  // Check known team→league map first to save API calls
+  const knownLeagueId = KNOWN_TEAM_LEAGUES[teamName.toLowerCase()];
   const popular = await getPopularLeagues();
 
-  for (const league of popular) {
+  const leaguesToSearch = knownLeagueId
+    ? [popular.find(l => l.id === knownLeagueId) ?? { id: knownLeagueId, name: 'Unknown' }, ...popular.filter(l => l.id !== knownLeagueId)]
+    : popular;
+
+  for (const league of leaguesToSearch) {
     const leagueId = league?.id;
     if (!leagueId) continue;
     try {
