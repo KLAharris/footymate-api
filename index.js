@@ -712,18 +712,7 @@ app.get('/standings', async (req, res) => {
 
 // ─── GET /team?name={teamName}  (team:24h, fixtures/results:12h) ──────────────
 
-app.get('/team', async (req, res) => {
-  const { name } = req.query;
-  if (!name) return errRes(res, 'Missing required query param: name', 400);
-
-  const teamId = findTeamId(name);
-  if (!teamId) {
-    return res.status(404).json({ ok: false, error: `Team not found: ${name}`, available: Object.keys(teamMap) });
-  }
-  const teamName = name;
-  const teamBadge = null;
-
-  // Fetch upcoming and recent in parallel, each isolated
+async function fetchTeamData(teamId, teamName) {
   const [upcoming, recent] = await Promise.all([
     (async () => {
       try {
@@ -760,8 +749,34 @@ app.get('/team', async (req, res) => {
       }
     })(),
   ]);
+  return { ok: true, team: teamName, teamBadge: null, upcoming, recent };
+}
 
-  return res.json({ ok: true, team: teamName, teamBadge, upcoming, recent });
+app.get('/team', async (req, res) => {
+  const { name } = req.query;
+  if (!name) return errRes(res, 'Missing required query param: name', 400);
+
+  const teamId = findTeamId(name);
+  if (!teamId) {
+    return res.status(404).json({ ok: false, error: `Team not found: ${name}`, available: Object.keys(teamMap) });
+  }
+
+  return res.json(await fetchTeamData(teamId, name));
+});
+
+// ─── GET /ask-team?q={userMessage}  (same response as /team) ──────────────────
+
+app.get('/ask-team', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return errRes(res, 'Missing required query param: q', 400);
+
+  const teamId = findTeamId(q);
+  if (!teamId) {
+    return res.status(404).json({ ok: false, error: `No team found in: ${q}` });
+  }
+
+  const resolvedName = resolveTeamName(q);
+  return res.json(await fetchTeamData(teamId, resolvedName));
 });
 
 // ─── GET /debug ────────────────────────────────────────────────────────────────
@@ -795,6 +810,7 @@ app.get('/', (req, res) => {
       'GET /results?team={teamName}',
       'GET /player?name={playerName}',
       'GET /team?name={teamName}',
+      'GET /ask-team?q={userMessage}',
     ],
     supportedLeagues: [
       'Premier League',
