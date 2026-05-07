@@ -224,6 +224,208 @@ const teamMap = {
   "toulouse": "133703",
 };
 
+const thaiNameMap = {
+  // ─── Premier League ───────────────────────────────────────────────────────────
+  "อาร์เซน่อล": "Arsenal",
+  "แอสตัน วิลล่า": "Aston Villa",
+  "แอสตันวิลล่า": "Aston Villa",
+  "บอร์นมัธ": "Bournemouth",
+  "เบรนท์ฟอร์ด": "Brentford",
+  "ไบรท์ตัน": "Brighton",
+  "ไบรตัน": "Brighton",
+  "เบิร์นลีย์": "Burnley",
+  "เชลซี": "Chelsea",
+  "คริสตัล พาเลซ": "Crystal Palace",
+  "คริสตัลพาเลซ": "Crystal Palace",
+  "เอฟเวอร์ตัน": "Everton",
+  "เอเวอร์ตัน": "Everton",
+  "ฟูแลม": "Fulham",
+  "ลีดส์": "Leeds",
+  "ลิเวอร์พูล": "Liverpool",
+  "แมนซิตี้": "Manchester City",
+  "แมนเชสเตอร์ซิตี้": "Manchester City",
+  "แมนยู": "Manchester United",
+  "แมนเชสเตอร์ยูไนเต็ด": "Manchester United",
+  "นิวคาสเซิล": "Newcastle",
+  "น็อตติ้งแฮม ฟอเรสต์": "Nottingham Forest",
+  "น็อตติ้งแฮมฟอเรสต์": "Nottingham Forest",
+  "ฟอเรสต์": "Nottingham Forest",
+  "ซันเดอร์แลนด์": "Sunderland",
+  "ท็อตแน่ม": "Tottenham",
+  "ท็อตแนม": "Tottenham",
+  "สเปอร์ส": "Tottenham",
+  "เวสต์แฮม": "West Ham",
+  "วูล์ฟแฮมป์ตัน": "Wolverhampton",
+  "วูล์ฟส์": "Wolverhampton",
+
+  // ─── La Liga ──────────────────────────────────────────────────────────────────
+  "แอธเลติก บิลเบา": "Athletic Bilbao",
+  "แอธเลติกบิลเบา": "Athletic Bilbao",
+  "บิลเบา": "Athletic Bilbao",
+  "แอตเลติโก มาดริด": "Atletico Madrid",
+  "แอตเลติโกมาดริด": "Atletico Madrid",
+  "แอตเลติโก": "Atletico Madrid",
+  "บาร์เซโลนา": "Barcelona",
+  "บาร์ซ่า": "Barcelona",
+  "เซลต้า บีโก": "Celta Vigo",
+  "เซลต้าบีโก": "Celta Vigo",
+  "เซลต้า": "Celta Vigo",
+  "เดปอร์ติโบ อลาเบส": "Deportivo Alaves",
+  "อลาเบส": "Deportivo Alaves",
+  "เอลเช่": "Elche",
+  "เอสปันยอล": "Espanyol",
+  "เฆตาเฟ": "Getafe",
+  "คีโรน่า": "Girona",
+  "จีโรน่า": "Girona",
+  "เลบานเต้": "Levante",
+  "มายอร์ก้า": "Mallorca",
+  "มาลอร์ก้า": "Mallorca",
+  "โอซาซูน่า": "Osasuna",
+  "ราโย บาเยกาโน": "Rayo Vallecano",
+  "ราโย": "Rayo Vallecano",
+  "เรอัล เบติส": "Real Betis",
+  "เรอัลเบติส": "Real Betis",
+  "เรอัล มาดริด": "Real Madrid",
+  "เรอัลมาดริด": "Real Madrid",
+  "เรอัล โซเซียดาด": "Real Sociedad",
+  "เรอัลโซเซียดาด": "Real Sociedad",
+  "เซบีย่า": "Sevilla",
+  "เซบิยา": "Sevilla",
+  "บาเลนเซีย": "Valencia",
+  "บียาร์เรอัล": "Villarreal",
+  "บิยาร์เรอัล": "Villarreal",
+
+  // ─── Serie A ──────────────────────────────────────────────────────────────────
+  "เอซี มิลาน": "AC Milan",
+  "เอซีมิลาน": "AC Milan",
+  "มิลาน": "AC Milan",
+  "อาตาลันต้า": "Atalanta",
+  "โบโลญ่า": "Bologna",
+  "โบโลน่า": "Bologna",
+  "คาลยารี": "Cagliari",
+  "โคโม่": "Como",
+  "เครโมเนเซ": "Cremonese",
+  "ฟิออเรนติน่า": "Fiorentina",
+  "เจนัว": "Genoa",
+  "เฮลลาส เวโรน่า": "Hellas Verona",
+  "เฮลลาสเวโรน่า": "Hellas Verona",
+  "เวโรน่า": "Hellas Verona",
+  "อินเตอร์ มิลาน": "Inter Milan",
+  "อินเตอร์มิลาน": "Inter Milan",
+  "อินเตอร์": "Inter Milan",
+  "ยูเวนตุส": "Juventus",
+  "ยูเว่": "Juventus",
+  "ลาซิโอ": "Lazio",
+  "เลชเช่": "Lecce",
+  "นาโปลี": "Napoli",
+  "ปาร์ม่า": "Parma",
+  "ปิซ่า": "Pisa",
+  "โรม่า": "Roma",
+  "อาส โรม่า": "Roma",
+  "ซาสซูโอโล": "Sassuolo",
+  "ตูริน": "Torino",
+  "โตริโน": "Torino",
+  "อูดิเนเซ่": "Udinese",
+
+  // ─── Bundesliga ───────────────────────────────────────────────────────────────
+  "บาเยอร์ เลเวอร์คูเซ่น": "Bayer Leverkusen",
+  "บาเยอร์เลเวอร์คูเซ่น": "Bayer Leverkusen",
+  "เลเวอร์คูเซ่น": "Bayer Leverkusen",
+  "บาเยิร์น มิวนิก": "Bayern Munich",
+  "บาเยิร์นมิวนิก": "Bayern Munich",
+  "บาเยิร์น": "Bayern Munich",
+  "โบรุสเซีย ดอร์ทมุนด์": "Borussia Dortmund",
+  "โบรุสเซียดอร์ทมุนด์": "Borussia Dortmund",
+  "ดอร์ทมุนด์": "Borussia Dortmund",
+  "โบรุสเซีย มึนเช่นกลัดบัค": "Borussia Monchengladbach",
+  "โบรุสเซียมึนเช่นกลัดบัค": "Borussia Monchengladbach",
+  "กลัดบัค": "Borussia Monchengladbach",
+  "ไอน์ทรัคท์ แฟรงค์เฟิร์ต": "Eintracht Frankfurt",
+  "ไอน์ทรัคท์แฟรงค์เฟิร์ต": "Eintracht Frankfurt",
+  "แฟรงค์เฟิร์ต": "Eintracht Frankfurt",
+  "อาวก์สบวร์ก": "Augsburg",
+  "ไฮเดนไฮม์": "Heidenheim",
+  "โคโลญ": "Cologne",
+  "โคโลญจน์": "Cologne",
+  "ไฟรบวร์ก": "Freiburg",
+  "ฮัมบวร์ก": "Hamburg",
+  "เอชเอสวี": "Hamburg",
+  "ฮอฟเฟ่นไฮม์": "Hoffenheim",
+  "ไมนซ์": "Mainz",
+  "อาร์บี ไลป์ซิก": "RB Leipzig",
+  "อาร์บีไลป์ซิก": "RB Leipzig",
+  "ไลป์ซิก": "RB Leipzig",
+  "เซนต์เปาลี": "St Pauli",
+  "เซงต์เปาลี": "St Pauli",
+  "ชตุทท์การ์ท": "Stuttgart",
+  "สตุ๊ตการ์ท": "Stuttgart",
+  "ยูเนี่ยน เบอร์ลิน": "Union Berlin",
+  "ยูเนี่ยนเบอร์ลิน": "Union Berlin",
+  "แวร์เดอร์ เบรเมน": "Werder Bremen",
+  "แวร์เดอร์เบรเมน": "Werder Bremen",
+  "เบรเมน": "Werder Bremen",
+  "วอล์ฟสบวร์ก": "Wolfsburg",
+  "โวล์ฟสบวร์ก": "Wolfsburg",
+
+  // ─── Ligue 1 ──────────────────────────────────────────────────────────────────
+  "อองเฌร์": "Angers",
+  "โอแซร์": "Auxerre",
+  "เบรสต์": "Brest",
+  "เลออาฟวร์": "Le Havre",
+  "เลออาฟร์": "Le Havre",
+  "ล็องส์": "Lens",
+  "ลีล": "Lille",
+  "ลอร็องต์": "Lorient",
+  "ลียง": "Lyon",
+  "มาร์กเซย": "Marseille",
+  "มาร์เซย์": "Marseille",
+  "แมตซ์": "Metz",
+  "โมนาโก": "Monaco",
+  "น็องต์": "Nantes",
+  "นีซ": "Nice",
+  "ปารีส เอฟซี": "Paris FC",
+  "ปารีสเอฟซี": "Paris FC",
+  "พีเอสจี": "PSG",
+  "ปารีส แซงต์-แฌร์แม็ง": "PSG",
+  "ปารีสแซงต์เฌอแม็ง": "PSG",
+  "ปารีส": "PSG",
+  "แรนส์": "Rennes",
+  "สตราสบูร์ก": "Strasbourg",
+  "ตูลูซ": "Toulouse",
+
+  // ─── Players ──────────────────────────────────────────────────────────────────
+  "เมสซี่": "Messi",
+  "เมสซี": "Messi",
+  "โรนัลโด้": "Ronaldo",
+  "โรนัลโด": "Ronaldo",
+  "ซาลาห์": "Salah",
+  "โมฮาเหม็ด ซาลาห์": "Mohamed Salah",
+  "อาร์ลิง ฮาลันด์": "Erling Haaland",
+  "ฮาลันด์": "Erling Haaland",
+  "เอ็มบัปเป้": "Mbappe",
+  "เอ็มบัปเป": "Mbappe",
+  "นีมาร์": "Neymar",
+  "เนย์มาร์": "Neymar",
+  "เวนเกอร์": "Wenger",
+  "ลามีน ยามาล": "Lamine Yamal",
+  "ยามาล": "Lamine Yamal",
+  "เบลลิงแฮม": "Bellingham",
+  "โจด เบลลิงแฮม": "Jude Bellingham",
+  "วินิซิอุส": "Vinicius",
+  "วีนิซิอุส": "Vinicius",
+  "ฟอเดน": "Foden",
+  "ฟิล ฟอเดน": "Phil Foden",
+  "บูคาโย ซาก้า": "Bukayo Saka",
+  "ซาก้า": "Bukayo Saka",
+  "เคน": "Kane",
+  "แฮร์รี่ เคน": "Harry Kane",
+};
+
+function resolveTeamName(name) {
+  const trimmed = name.trim();
+  return thaiNameMap[trimmed] ?? trimmed;
+}
+
 async function cachedGet(key, fn, ttl) {
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
@@ -374,9 +576,11 @@ app.get('/player', async (req, res) => {
   const { name } = req.query;
   if (!name) return errRes(res, 'Missing required query param: name', 400);
 
+  const resolvedName = resolveTeamName(name);
+
   try {
-    const data = await cachedGet(`player:${name.toLowerCase()}`, async () => {
-      const r = await sportsdb.get('/searchplayers.php', { params: { p: name.trim() } });
+    const data = await cachedGet(`player:${resolvedName.toLowerCase()}`, async () => {
+      const r = await sportsdb.get('/searchplayers.php', { params: { p: resolvedName } });
       return r.data?.player ?? [];
     }, 86400);
 
@@ -480,7 +684,8 @@ app.get('/team', async (req, res) => {
   const { name } = req.query;
   if (!name) return errRes(res, 'Missing required query param: name', 400);
 
-  const key = name.toLowerCase();
+  const resolvedName = resolveTeamName(name);
+  const key = resolvedName.toLowerCase();
   const teamId = teamMap[key];
   if (!teamId) {
     return res.status(404).json({ ok: false, error: `Team not found: ${name}`, available: Object.keys(teamMap) });
