@@ -33,6 +33,25 @@ const sportsdb = axios.create({
   timeout: 15000,
 });
 
+const SPORTSDB_LEAGUE_MAP = {
+  "premier league": "4328",
+  "epl": "4328",
+  "la liga": "4335",
+  "serie a": "4332",
+  "bundesliga": "4331",
+  "ligue 1": "4334",
+  "champions league": "4480",
+  "uefa champions league": "4480",
+  "europa league": "4481",
+  "fa cup": "4482",
+};
+
+function currentSeason() {
+  const now = new Date();
+  const year = now.getFullYear();
+  return (now.getMonth() + 1) >= 7 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+}
+
 const LIVE_STATUSES = new Set([
   '1st_half', '2nd_half', 'halftime', 'extra_time',
   'extra_time_1st_half', 'extra_time_2nd_half', 'penalties', 'break_time',
@@ -99,7 +118,7 @@ const teamMap = {
   // La Liga
   "barcelona": "133739",
   "barca": "133739",
-  "real madrid": "133742",
+  "real madrid": "133738",
   "atletico madrid": "133744",
   "atletico": "133744",
   "sevilla": "133746",
@@ -418,48 +437,24 @@ app.get('/player', async (req, res) => {
   if (!name) return errRes(res, 'Missing required query param: name', 400);
 
   try {
-    const nameTokens = name.trim().split(/\s+/);
-    const q = name.toLowerCase();
-
-    const data = await cachedGet(`player:${q}`, async () => {
-      const r = await bsd.get('/players/', { params: { search: name.trim(), limit: 100 } });
-      return r.data?.results ?? [];
+    const data = await cachedGet(`player:${name.toLowerCase()}`, async () => {
+      const r = await sportsdb.get('/searchplayers.php', { params: { p: name.trim() } });
+      return r.data?.player ?? [];
     }, 86400);
 
-    const players = Array.isArray(data) ? data : (data?.results ?? []);
-    if (!players.length) return errRes(res, `Player not found: ${name}`, 404);
+    if (!data.length) return errRes(res, `Player not found: ${name}`, 404);
 
-    const tokens = q.split(/\s+/);
-
-    // Score each player by how many name tokens match
-    const scored = players
-      .map(p => {
-        const pName = (p.name ?? '').toLowerCase();
-        const exact = pName === q ? 100 : 0;
-        const tokenMatches = tokens.filter(t => pName.includes(t)).length;
-        return { p, score: exact + tokenMatches };
-      })
-      .filter(x => x.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    if (!scored.length) return errRes(res, `Player not found: ${name}`, 404);
-
-    const top = scored.slice(0, 5).map(x => x.p);
-
-    const clean = top.map(p => ({
-      id: p.id,
-      name: p.name,
-      shortName: p.short_name,
-      position: p.specific_position ?? p.position,
-      nationality: p.nationality,
-      team: p.current_team?.name ?? null,
-      dateOfBirth: p.date_of_birth ?? null,
-      marketValue: p.market_value ?? null,
+    const clean = data.slice(0, 5).map(p => ({
+      name: p.strPlayer,
+      team: p.strTeam ?? null,
+      nationality: p.strNationality ?? null,
+      position: p.strPosition ?? null,
+      thumbnail: p.strThumb ?? null,
     }));
 
     return res.json({ ok: true, count: clean.length, players: clean });
   } catch (e) {
-    return errRes(res, e?.response?.data?.detail ?? e.message);
+    return errRes(res, e.message);
   }
 });
 
@@ -469,9 +464,43 @@ app.get('/standings', async (req, res) => {
   const { league } = req.query;
   if (!league) return errRes(res, 'Missing required query param: league', 400);
 
-  const q = league.toLowerCase();
+  const q = league.toLowerCase().trim();
 
-  // Try ESPN first (more reliable)
+  // Map league name to TheSportsDB league ID
+  const leagueEntry = Object.entries(SPORTSDB_LEAGUE_MAP).find(([k]) =>
+    q === k || q.includes(k) || k.includes(q)
+  );
+  const leagueId = leagueEntry?.[1];
+
+  // Try TheSportsDB lookuptable first
+  if (leagueId) {
+    try {
+      const season = currentSeason();
+      const table = await cachedGet(`standings:sportsdb:${leagueId}:${season}`, async () => {
+        const r = await sportsdb.get('/lookuptable.php', { params: { l: leagueId, s: season } });
+        return (r.data?.table ?? []).map(row => ({
+          position: parseInt(row.intRank, 10),
+          team: row.strTeam,
+          badge: row.strBadge ?? null,
+          played: parseInt(row.intPlayed, 10),
+          won: parseInt(row.intWin, 10),
+          drawn: parseInt(row.intDraw, 10),
+          lost: parseInt(row.intLoss, 10),
+          points: parseInt(row.intPoints, 10),
+          goalDiff: parseInt(row.intGoalDifference, 10),
+          form: row.strForm ?? null,
+        }));
+      }, 21600);
+
+      if (table.length) {
+        return res.json({ ok: true, league, season, source: 'thesportsdb', standings: table });
+      }
+    } catch (_) {
+      // fall through to ESPN
+    }
+  }
+
+  // ESPN fallback
   const espnSlug = Object.entries(ESPN_LEAGUE_SLUGS).find(([k]) => q.includes(k) || k.includes(q))?.[1];
 
   if (espnSlug) {
@@ -501,52 +530,10 @@ app.get('/standings', async (req, res) => {
       if (table.length) {
         return res.json({ ok: true, league, source: 'espn', standings: table });
       }
-    } catch (_) {
-      // fall through to BSD
-    }
+    } catch (_) {}
   }
 
-  // BSD fallback
-  try {
-    const leaguesData = await cachedGet('all_leagues', async () => {
-      const r = await bsd.get('/leagues/', { params: { limit: 100 } });
-      return r.data;
-    }, 86400);
-
-    const leagues = leaguesData?.results ?? [];
-    const leagueObj = leagues.find(l =>
-      (l.name ?? '').toLowerCase().includes(q) || q.includes((l.name ?? '').toLowerCase())
-    );
-
-    if (!leagueObj) return errRes(res, `League not found: ${league}`, 404);
-
-    const seasonId = leagueObj.current_season?.id;
-    if (!seasonId) return errRes(res, `No active season for: ${league}`, 404);
-
-    const standingsData = await cachedGet(`standings:bsd:${seasonId}`, async () => {
-      const r = await bsd.get('/standings/', { params: { season: seasonId, limit: 30 } });
-      return r.data;
-    }, 21600);
-
-    const rows = standingsData?.results ?? standingsData?.standings ?? (Array.isArray(standingsData) ? standingsData : []);
-
-    if (!rows.length) return errRes(res, `No standings data found for: ${league}`, 404);
-
-    const table = rows.map(r => ({
-      position: r.rank ?? r.position,
-      team: r.team?.name ?? r.team_name,
-      played: r.played ?? r.matches_played,
-      won: r.won ?? r.wins,
-      drawn: r.drawn ?? r.draws,
-      lost: r.lost ?? r.losses,
-      points: r.points ?? r.pts,
-      goalDiff: r.goal_difference ?? r.gd,
-    }));
-
-    return res.json({ ok: true, league: leagueObj.name, source: 'bsd', standings: table });
-  } catch (e) {
-    return errRes(res, e?.response?.data?.detail ?? e.message);
-  }
+  return errRes(res, `League not found or no standings available: ${league}`, 404);
 });
 
 // ─── GET /team?name={teamName}  (team:24h, fixtures/results:12h) ──────────────
@@ -635,6 +622,18 @@ app.get('/', (req, res) => {
       'GET /results?team={teamName}',
       'GET /player?name={playerName}',
       'GET /team?name={teamName}',
+    ],
+    supportedLeagues: [
+      'Premier League',
+      'EPL',
+      'La Liga',
+      'Serie A',
+      'Bundesliga',
+      'Ligue 1',
+      'Champions League',
+      'UEFA Champions League',
+      'Europa League',
+      'FA Cup',
     ],
   });
 });
