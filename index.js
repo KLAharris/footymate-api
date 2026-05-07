@@ -811,6 +811,57 @@ app.get('/ask-standings', async (req, res) => {
   return res.json(result);
 });
 
+// Player Thai keys (Players section of thaiNameMap only)
+const PLAYER_THAI_KEYS = new Set([
+  "เมสซี่", "เมสซี", "โรนัลโด้", "โรนัลโด", "ซาลาห์", "โมฮาเหม็ด ซาลาห์",
+  "อาร์ลิง ฮาลันด์", "ฮาลันด์", "เอ็มบัปเป้", "เอ็มบัปเป", "นีมาร์", "เนย์มาร์",
+  "เวนเกอร์", "ลามีน ยามาล", "ยามาล", "เบลลิงแฮม", "โจด เบลลิงแฮม",
+  "วินิซิอุส", "วีนิซิอุส", "ฟอเดน", "ฟิล ฟอเดน", "บูคาโย ซาก้า", "ซาก้า",
+  "เคน", "แฮร์รี่ เคน",
+]);
+
+// ─── GET /chat?q={userMessage}  (smart router) ────────────────────────────────
+
+app.get('/chat', async (req, res) => {
+  const q = (req.query.q ?? '').trim();
+  if (!q) return res.json({ ok: false, error: 'กรุณาระบุคำถามครับ' });
+
+  const lower = q.toLowerCase();
+
+  // a. LIVE CHECK
+  const liveKeywords = ['live', 'สด', 'ตอนนี้', 'กำลังแข่ง', 'บอลสด', 'แมทช์ตอนนี้'];
+  if (liveKeywords.some(kw => lower.includes(kw))) {
+    return res.json({ ok: true, type: 'live', message: "กรุณาถามว่า 'บอลสดตอนนี้มีอะไรบ้าง' เพื่อดูแมทช์สด" });
+  }
+
+  // b. STANDINGS CHECK
+  const resolvedName = resolveTeamName(q);
+  const resolvedLower = resolvedName.toLowerCase();
+  const leagueInSportsdb = Object.keys(SPORTSDB_LEAGUE_MAP).some(k => resolvedLower === k || resolvedLower.includes(k) || k.includes(resolvedLower));
+  const leagueInEspn = Object.keys(ESPN_LEAGUE_SLUGS).some(k => resolvedLower === k || resolvedLower.includes(k) || k.includes(resolvedLower));
+  const hasLeagueWord = ['ตาราง', 'standing', 'คะแนน', 'ลีก'].some(kw => lower.includes(kw));
+  if (leagueInSportsdb || leagueInEspn || hasLeagueWord) {
+    const result = await fetchStandingsData(q);
+    if (result) return res.json(result);
+  }
+
+  // c. PLAYER CHECK
+  const hasPlayerName = [...PLAYER_THAI_KEYS].some(key => q.includes(key));
+  const hasPlayerWord = ['นักเตะ', 'ผู้เล่น', 'player', 'เล่นให้', 'ตำแหน่ง'].some(kw => lower.includes(kw));
+  if (hasPlayerName || hasPlayerWord) {
+    try {
+      const players = await fetchPlayerData(q);
+      if (players) return res.json({ ok: true, count: players.length, players });
+    } catch (_) {}
+  }
+
+  // d. TEAM CHECK
+  const teamId = findTeamId(q);
+  if (teamId) return res.json(await fetchTeamData(teamId, resolvedName));
+
+  return res.json({ ok: false, error: 'ไม่พบข้อมูลที่ต้องการครับ ลองถามเกี่ยวกับทีม นักเตะ หรือตารางคะแนนได้เลยครับ' });
+});
+
 // ─── GET /debug ────────────────────────────────────────────────────────────────
 
 app.get('/debug', async (req, res) => {
@@ -845,6 +896,7 @@ app.get('/', (req, res) => {
       'GET /ask-team?q={userMessage}',
       'GET /ask-player?q={userMessage}',
       'GET /ask-standings?q={userMessage}',
+      'GET /chat?q={userMessage}',
     ],
     supportedLeagues: [
       'Premier League',
