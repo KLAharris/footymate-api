@@ -419,6 +419,19 @@ const thaiNameMap = {
   "ซาก้า": "Bukayo Saka",
   "เคน": "Kane",
   "แฮร์รี่ เคน": "Harry Kane",
+
+  // ─── Leagues ──────────────────────────────────────────────────────────────────
+  "พรีเมียร์ลีก": "Premier League",
+  "อีพีแอล": "Premier League",
+  "ลาลีกา": "La Liga",
+  "เซเรียอา": "Serie A",
+  "บุนเดสลีกา": "Bundesliga",
+  "ลีกเอิง": "Ligue 1",
+  "ลีก1": "Ligue 1",
+  "แชมเปี้ยนส์ลีก": "Champions League",
+  "ยูฟ่าแชมเปี้ยนส์ลีก": "UEFA Champions League",
+  "ยูโรปาลีก": "Europa League",
+  "เอฟเอคัพ": "FA Cup",
 };
 
 // Resolves a raw input to an English name via thaiNameMap (exact then partial).
@@ -604,29 +617,30 @@ app.get('/results', async (req, res) => {
 
 // ─── GET /player?name={playerName}  (24h cache) ───────────────────────────────
 
+async function fetchPlayerData(rawName) {
+  const resolvedName = resolveTeamName(rawName);
+  const data = await cachedGet(`player:${resolvedName.toLowerCase()}`, async () => {
+    const r = await sportsdb.get('/searchplayers.php', { params: { p: resolvedName } });
+    return r.data?.player ?? [];
+  }, 86400);
+  if (!data.length) return null;
+  return data.slice(0, 5).map(p => ({
+    name: p.strPlayer,
+    team: p.strTeam ?? null,
+    nationality: p.strNationality ?? null,
+    position: p.strPosition ?? null,
+    thumbnail: p.strThumb ?? null,
+  }));
+}
+
 app.get('/player', async (req, res) => {
   const { name } = req.query;
   if (!name) return errRes(res, 'Missing required query param: name', 400);
 
-  const resolvedName = resolveTeamName(name);
-
   try {
-    const data = await cachedGet(`player:${resolvedName.toLowerCase()}`, async () => {
-      const r = await sportsdb.get('/searchplayers.php', { params: { p: resolvedName } });
-      return r.data?.player ?? [];
-    }, 86400);
-
-    if (!data.length) return errRes(res, `Player not found: ${name}`, 404);
-
-    const clean = data.slice(0, 5).map(p => ({
-      name: p.strPlayer,
-      team: p.strTeam ?? null,
-      nationality: p.strNationality ?? null,
-      position: p.strPosition ?? null,
-      thumbnail: p.strThumb ?? null,
-    }));
-
-    return res.json({ ok: true, count: clean.length, players: clean });
+    const players = await fetchPlayerData(name);
+    if (!players) return errRes(res, `Player not found: ${name}`, 404);
+    return res.json({ ok: true, count: players.length, players });
   } catch (e) {
     return errRes(res, e.message);
   }
@@ -634,19 +648,14 @@ app.get('/player', async (req, res) => {
 
 // ─── GET /standings?league={leagueName}  (6h cache) ───────────────────────────
 
-app.get('/standings', async (req, res) => {
-  const { league } = req.query;
-  if (!league) return errRes(res, 'Missing required query param: league', 400);
+async function fetchStandingsData(leagueInput) {
+  const q = resolveTeamName(leagueInput).toLowerCase().trim();
 
-  const q = league.toLowerCase().trim();
-
-  // Map league name to TheSportsDB league ID
   const leagueEntry = Object.entries(SPORTSDB_LEAGUE_MAP).find(([k]) =>
     q === k || q.includes(k) || k.includes(q)
   );
   const leagueId = leagueEntry?.[1];
 
-  // Try TheSportsDB lookuptable first
   if (leagueId) {
     try {
       const season = currentSeason();
@@ -665,18 +674,11 @@ app.get('/standings', async (req, res) => {
           form: row.strForm ?? null,
         }));
       }, 21600);
-
-      if (table.length) {
-        return res.json({ ok: true, league, season, source: 'thesportsdb', standings: table });
-      }
-    } catch (_) {
-      // fall through to ESPN
-    }
+      if (table.length) return { ok: true, league: leagueInput, season: currentSeason(), source: 'thesportsdb', standings: table };
+    } catch (_) {}
   }
 
-  // ESPN fallback
   const espnSlug = Object.entries(ESPN_LEAGUE_SLUGS).find(([k]) => q.includes(k) || k.includes(q))?.[1];
-
   if (espnSlug) {
     try {
       const table = await cachedGet(`standings:espn:${espnSlug}`, async () => {
@@ -700,14 +702,20 @@ app.get('/standings', async (req, res) => {
         }
         return rows;
       }, 21600);
-
-      if (table.length) {
-        return res.json({ ok: true, league, source: 'espn', standings: table });
-      }
+      if (table.length) return { ok: true, league: leagueInput, source: 'espn', standings: table };
     } catch (_) {}
   }
 
-  return errRes(res, `League not found or no standings available: ${league}`, 404);
+  return null;
+}
+
+app.get('/standings', async (req, res) => {
+  const { league } = req.query;
+  if (!league) return errRes(res, 'Missing required query param: league', 400);
+
+  const result = await fetchStandingsData(league);
+  if (!result) return errRes(res, `League not found or no standings available: ${league}`, 404);
+  return res.json(result);
 });
 
 // ─── GET /team?name={teamName}  (team:24h, fixtures/results:12h) ──────────────
@@ -768,15 +776,39 @@ app.get('/team', async (req, res) => {
 
 app.get('/ask-team', async (req, res) => {
   const { q } = req.query;
-  if (!q) return errRes(res, 'Missing required query param: q', 400);
+  if (!q) return res.status(400).json({ ok: false, error: 'กรุณาระบุชื่อทีมครับ' });
 
   const teamId = findTeamId(q);
-  if (!teamId) {
-    return res.status(404).json({ ok: false, error: `No team found in: ${q}` });
-  }
+  if (!teamId) return res.status(404).json({ ok: false, error: `No team found in: ${q}` });
 
   const resolvedName = resolveTeamName(q);
   return res.json(await fetchTeamData(teamId, resolvedName));
+});
+
+// ─── GET /ask-player?q={userMessage} ──────────────────────────────────────────
+
+app.get('/ask-player', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ ok: false, error: 'กรุณาระบุชื่อนักเตะครับ' });
+
+  try {
+    const players = await fetchPlayerData(q);
+    if (!players) return res.status(404).json({ ok: false, error: `No player found in: ${q}` });
+    return res.json({ ok: true, count: players.length, players });
+  } catch (e) {
+    return errRes(res, e.message);
+  }
+});
+
+// ─── GET /ask-standings?q={userMessage} ───────────────────────────────────────
+
+app.get('/ask-standings', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ ok: false, error: 'กรุณาระบุชื่อลีกครับ' });
+
+  const result = await fetchStandingsData(q);
+  if (!result) return res.status(404).json({ ok: false, error: `No league found in: ${q}` });
+  return res.json(result);
 });
 
 // ─── GET /debug ────────────────────────────────────────────────────────────────
@@ -811,6 +843,8 @@ app.get('/', (req, res) => {
       'GET /player?name={playerName}',
       'GET /team?name={teamName}',
       'GET /ask-team?q={userMessage}',
+      'GET /ask-player?q={userMessage}',
+      'GET /ask-standings?q={userMessage}',
     ],
     supportedLeagues: [
       'Premier League',
