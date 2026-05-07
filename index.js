@@ -421,9 +421,41 @@ const thaiNameMap = {
   "แฮร์รี่ เคน": "Harry Kane",
 };
 
+// Resolves a raw input to an English name via thaiNameMap (exact then partial).
 function resolveTeamName(name) {
   const trimmed = name.trim();
-  return thaiNameMap[trimmed] ?? trimmed;
+  if (thaiNameMap[trimmed]) return thaiNameMap[trimmed];
+  for (const [thaiKey, engName] of Object.entries(thaiNameMap)) {
+    if (trimmed.includes(thaiKey)) return engName;
+  }
+  return trimmed;
+}
+
+// Finds a teamMap ID from raw input using: exact → partial English → Thai→English.
+function findTeamId(name) {
+  const trimmed = name.trim();
+  const lower = trimmed.toLowerCase();
+
+  // 1. Exact match
+  if (teamMap[lower]) return teamMap[lower];
+
+  // 2. Partial match against teamMap keys
+  for (const [k, id] of Object.entries(teamMap)) {
+    if (lower.includes(k) || k.includes(lower)) return id;
+  }
+
+  // 3. Thai partial match → resolve to English → match teamMap
+  for (const [thaiKey, engName] of Object.entries(thaiNameMap)) {
+    if (trimmed.includes(thaiKey) || thaiKey.includes(trimmed)) {
+      const engLower = engName.toLowerCase();
+      if (teamMap[engLower]) return teamMap[engLower];
+      for (const [k, id] of Object.entries(teamMap)) {
+        if (engLower.includes(k) || k.includes(engLower)) return id;
+      }
+    }
+  }
+
+  return null;
 }
 
 async function cachedGet(key, fn, ttl) {
@@ -684,9 +716,7 @@ app.get('/team', async (req, res) => {
   const { name } = req.query;
   if (!name) return errRes(res, 'Missing required query param: name', 400);
 
-  const resolvedName = resolveTeamName(name);
-  const key = resolvedName.toLowerCase();
-  const teamId = teamMap[key];
+  const teamId = findTeamId(name);
   if (!teamId) {
     return res.status(404).json({ ok: false, error: `Team not found: ${name}`, available: Object.keys(teamMap) });
   }
